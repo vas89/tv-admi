@@ -43,7 +43,6 @@ def get_device_ip(device_id: str) -> str:
     match = re.search(r"inet (\d+\.\d+\.\d+\.\d+)/", out)
     if match:
         return match.group(1)
-    # Fallback: try netcfg
     out2 = _run_adb(["shell", "netcfg"], device_id)
     match2 = re.search(r"wlan0\s+UP\s+(\d+\.\d+\.\d+\.\d+)", out2)
     return match2.group(1) if match2 else None
@@ -52,7 +51,6 @@ def get_device_ip(device_id: str) -> str:
 def get_wifi_info(device_id: str) -> dict:
     """Retrieve WiFi connection details."""
     info = {}
-    # SSID + BSSID via wpa_supplicant or dumpsys
     wpa = _run_adb(["shell", "wpa_cli status"], device_id)
     dumpsys = _run_adb(["shell", "dumpsys wifi | grep -E 'SSID|BSSID|freq|rssi|ip_address'"], device_id)
 
@@ -124,42 +122,41 @@ def port_scan(target: str, ports: list = None, timeout: float = 0.8, max_workers
     else:
         console.print("[yellow]No open ports found in the scanned range.[/]")
 
-    # Flag ADB port
     if 5555 in open_ports:
         console.print(Panel(
-            "[bold red]⚠  ADB port 5555 is OPEN![/]\n"
-            "The device may be exploitable via: [bold yellow]adb connect {target}:5555[/]",
+            f"[bold red]⚠  ADB port 5555 is OPEN![/]\n"
+            f"The device may be exploitable via: [bold yellow]adb connect {target}:5555[/]",
             border_style="red"))
 
     return open_ports
 
 
 def discover_devices(subnet: str) -> list:
-    """Discover live hosts on a subnet (e.g., 192.168.1.0/24)."""
+    """Discover live hosts on a subnet (e.g. 192.168.1)."""
     console.print(f"[cyan]Discovering hosts on {subnet}...[/]")
-    try:
-        base = ".".join(subnet.split(".")[:3])
-        live = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=50) as ex:
-            futures = {ex.submit(_scan_port, f"{base}.{i}", 80, 0.5): i for i in range(1, 255)}
-            futures2 = {ex.submit(_scan_port, f"{base}.{i}", 443, 0.5): i for i in range(1, 255)}
-            for fut in concurrent.futures.as_completed({**futures, **futures2}):
-                # track by combining results
-                pass
 
-        # simpler approach: ping sweep
-        hosts = []
-        for i in range(1, 255):
-            host = f"{base}.{i}"
-            r = subprocess.run(["ping", "-c", "1", "-W", "1", host],
-                               capture_output=True, text=True)
-            if r.returncode == 0:
-                hosts.append(host)
-                console.print(f"  [green]✓ Live:[/] {host}")
-        return hosts
-    except Exception as e:
-        console.print(f"[red]Error in discovery: {e}[/]")
-        return []
+    base = ".".join(subnet.split(".")[:3])
+    hosts = []
+
+    def _ping(host: str):
+        r = subprocess.run(["ping", "-c", "1", "-W", "1", host], capture_output=True, text=True)
+        return host if r.returncode == 0 else None
+
+    with console.status(f"[cyan]Ping sweep on {base}.0/24...[/]"):
+        with concurrent.futures.ThreadPoolExecutor(max_workers=64) as ex:
+            futures = [ex.submit(_ping, f"{base}.{i}") for i in range(1, 255)]
+            for fut in concurrent.futures.as_completed(futures):
+                host = fut.result()
+                if host:
+                    hosts.append(host)
+                    console.print(f"  [green]✓ Live:[/] {host}")
+
+    if not hosts:
+        console.print("[yellow]No live hosts found.[/]")
+    else:
+        console.print(f"\n[bold green]✓ {len(hosts)} live host(s) found.[/]")
+
+    return hosts
 
 
 def check_ssl_pinning(device_id: str, package: str) -> dict:
