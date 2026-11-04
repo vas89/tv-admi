@@ -196,13 +196,11 @@ def generate_html_report(data: dict, output: str = "phantomdroid_report.html") -
     report_id = f"PD-{int(time.time())}"
     rems = _remediations()
 
-    # Count severities
     counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFO": 0}
     for f in findings:
         sev = f.get("severity", "INFO").upper()
         counts[sev] = counts.get(sev, 0) + 1
 
-    # Build findings section
     findings_html = '<section><div class="section-title">🚨 Security Findings</div>'
     sorted_findings = sorted(findings, key=lambda x: SEV_ORDER.get(x.get("severity", "INFO").upper(), 99))
     for f in sorted_findings:
@@ -223,7 +221,6 @@ def generate_html_report(data: dict, output: str = "phantomdroid_report.html") -
         </div>"""
     findings_html += "</section>"
 
-    # Permissions section
     perms = data.get("permissions", [])
     perms_html = ""
     if perms:
@@ -232,7 +229,6 @@ def generate_html_report(data: dict, output: str = "phantomdroid_report.html") -
             perms_html += f'<tr><td>{p["permission"]}</td><td>{_badge(p["severity"])}</td></tr>'
         perms_html += "</tbody></table></section>"
 
-    # URLs section
     urls = data.get("urls", [])
     urls_html = ""
     if urls:
@@ -241,7 +237,6 @@ def generate_html_report(data: dict, output: str = "phantomdroid_report.html") -
             urls_html += f"<tr><td>{u}</td></tr>"
         urls_html += "</tbody></table></section>"
 
-    # Secrets section
     secrets = data.get("secrets", [])
     secrets_html = ""
     if secrets:
@@ -252,16 +247,18 @@ def generate_html_report(data: dict, output: str = "phantomdroid_report.html") -
 
     sections = findings_html + perms_html + secrets_html + urls_html
 
-    html = HTML_TEMPLATE.format(
-        target=target,
-        timestamp=ts,
-        report_id=report_id,
-        count_critical=counts.get("CRITICAL", 0),
-        count_high=counts.get("HIGH", 0),
-        count_medium=counts.get("MEDIUM", 0),
-        count_low=counts.get("LOW", 0),
-        count_total=len(findings),
-        sections=sections,
+    # Безопасная подстановка (без .format, чтобы не падать на символах {})
+    html = (
+        HTML_TEMPLATE
+        .replace("{target}", str(target))
+        .replace("{timestamp}", ts)
+        .replace("{report_id}", report_id)
+        .replace("{count_critical}", str(counts.get("CRITICAL", 0)))
+        .replace("{count_high}", str(counts.get("HIGH", 0)))
+        .replace("{count_medium}", str(counts.get("MEDIUM", 0)))
+        .replace("{count_low}", str(counts.get("LOW", 0)))
+        .replace("{count_total}", str(len(findings)))
+        .replace("{sections}", sections)
     )
 
     with open(output, "w", encoding="utf-8") as f:
