@@ -84,14 +84,12 @@ def animate_glitch_banner():
     from rich.markup import escape
     lines = BANNER_ART.strip("\n").split("\n")
     
-    # Glitch phase
     chars = "01$#!@%^&*()_+=-[]{}|;:,.<>?/"
     for _ in range(12):
         glitch_lines = []
         for line in lines:
             glitch_line = "".join(random.choice(chars) if c != " " else " " for c in line)
             color = random.choice(BANNER_LINES_GRADIENT)
-            # Escape the glitch line to prevent MarkupError
             glitch_lines.append(f"[bold {color}]{escape(glitch_line)}[/]")
         
         console.clear()
@@ -99,7 +97,6 @@ def animate_glitch_banner():
             console.print(Align.center(gl))
         time.sleep(0.06)
 
-    # Settling phase (line by line reveal)
     console.clear()
     for i, line in enumerate(lines):
         color = BANNER_LINES_GRADIENT[i % len(BANNER_LINES_GRADIENT)]
@@ -110,12 +107,10 @@ def print_banner():
     """Print the animated PhantomDroid banner with live status."""
     animate_glitch_banner()
 
-    # Tagline
     tagline = Text("◈ ADVANCED ANDROID PENTESTING FRAMEWORK ◈", style="bold italic bright_magenta")
     console.print(Align.center(tagline))
     console.print()
 
-    # Status Panel
     status_text = get_banner_status()
     console.print(Align.center(Panel(
         status_text,
@@ -351,7 +346,6 @@ def handle_report_generator():
     console.rule("[bold magenta]📋 Report Generator[/]")
     target = Prompt.ask("[cyan]Target description (app/device name)[/]", default="Unknown Target")
 
-    # Build report from session
     data = _get_session()
     data["target"] = target
 
@@ -463,7 +457,7 @@ def handle_about():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  SESSION STORE (in-memory findings accumulator)
+#  SESSION STORE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _SESSION = {"findings": [], "permissions": [], "secrets": [], "urls": []}
@@ -554,7 +548,7 @@ def interactive_mode():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-#  CLI MODE  (argparse)
+#  CLI MODE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def build_parser() -> argparse.ArgumentParser:
@@ -577,7 +571,6 @@ Examples:
     p.add_argument("--interactive", "-i",  action="store_true",    help="Launch interactive menu mode")
     p.add_argument("--version",     "-v",  action="store_true",    help="Show version")
 
-    # Device
     dg = p.add_argument_group("Device")
     dg.add_argument("--devices",           action="store_true",    help="List connected devices")
     dg.add_argument("--device", "-d",      metavar="SERIAL",       help="Target device serial number")
@@ -585,18 +578,18 @@ Examples:
     dg.add_argument("--shell",             metavar="CMD",          help="Run ADB shell command")
     dg.add_argument("--adb-shell",         action="store_true",    help="Drop into interactive ADB shell")
     dg.add_argument("--adb-wifi",          action="store_true",    help="Enable ADB over WiFi")
+    dg.add_argument("--wifi-port",         type=int, default=5555, help="Port for --adb-wifi")
     dg.add_argument("--screenshot",        action="store_true",    help="Capture device screenshot")
     dg.add_argument("--logcat",            metavar="N", type=int,  help="Capture N lines of logcat", nargs="?", const=200)
     dg.add_argument("--packages",          choices=["all","system","third_party","disabled"],
                                                                    help="List installed packages")
     dg.add_argument("--pull",              metavar="REMOTE",       help="Pull file from device")
+    dg.add_argument("--pull-out",          metavar="LOCAL",        help="Local destination for --pull")
     dg.add_argument("--push",             nargs=2, metavar=("LOCAL","REMOTE"), help="Push file to device")
 
-    # APK Analysis
     ag = p.add_argument_group("APK Analysis")
     ag.add_argument("--apk",              metavar="FILE",          help="APK file to analyze")
 
-    # Network
     ng = p.add_argument_group("Network")
     ng.add_argument("--port-scan",        action="store_true",    help="Port scan device IP")
     ng.add_argument("--target",           metavar="IP",           help="Explicit scan target IP")
@@ -606,14 +599,12 @@ Examples:
     ng.add_argument("--ssl-pinning",      metavar="PKG",          help="Check SSL pinning for package")
     ng.add_argument("--mitm-guide",       action="store_true",    help="Show MitM setup guide")
 
-    # Vulnerability
     vg = p.add_argument_group("Vulnerability")
     vg.add_argument("--vuln-scan",        action="store_true",    help="Run full vulnerability scan")
     vg.add_argument("--pkg",             metavar="PKG",           help="Target package name")
     vg.add_argument("--cve-check",       action="store_true",     help="Check Android CVEs for device")
     vg.add_argument("--root-check",      action="store_true",     help="Check if device is rooted")
 
-    # Exploit
     eg = p.add_argument_group("Exploit")
     eg.add_argument("--exploit",          metavar="MODULE",
                     choices=["activity","broadcast","provider","deep-link","frida","shell-drop","db-extract","lock-bypass","dev-options"],
@@ -626,7 +617,6 @@ Examples:
     eg.add_argument("--lport",            metavar="PORT", type=int, default=4444, help="Listener port")
     eg.add_argument("--db-name",          metavar="DB",           help="Database filename to extract")
 
-    # Payload
     pg = p.add_argument_group("Payload")
     pg.add_argument("--payload",          metavar="TYPE",
                     choices=["reverse_tcp","reverse_https","reverse_http","shell_tcp",
@@ -637,7 +627,6 @@ Examples:
                     help="Obfuscation method")
     pg.add_argument("--raw-payload",      metavar="CMD",          help="Payload string to obfuscate")
 
-    # Report
     rg = p.add_argument_group("Report")
     rg.add_argument("--report",           choices=["html","json","both","table"],
                     help="Generate report after scan")
@@ -654,58 +643,46 @@ def cli_mode(args):
     device_id = args.device
     apk_data = {}
 
-    # Version
     if args.version:
         console.print(f"[bold magenta]{TOOL_NAME}[/] v[bold cyan]{VERSION}[/] by [bold]{AUTHOR}[/]")
         return
 
-    # Devices
     if args.devices:
         adb_manager.check_adb()
         adb_manager.list_devices()
 
-    # Device info
     if args.info and device_id:
         adb_manager.device_info(device_id)
 
-    # Shell command
     if args.shell and device_id:
         adb_manager.shell_cmd(device_id, args.shell)
 
-    # Interactive ADB shell
     if args.adb_shell and device_id:
         adb_manager.interactive_shell(device_id)
 
-    # ADB WiFi
     if args.adb_wifi and device_id:
-        adb_manager.enable_adb_wifi(device_id, args.lport)
+        adb_manager.enable_adb_wifi(device_id, args.wifi_port)
 
-    # Screenshot
     if args.screenshot and device_id:
         adb_manager.take_screenshot(device_id)
 
-    # Logcat
     if args.logcat is not None and device_id:
         adb_manager.capture_logcat(device_id, args.logcat)
 
-    # Packages
     if args.packages and device_id:
         adb_manager.list_packages(device_id, args.packages)
 
-    # Pull file
     if args.pull and device_id:
-        adb_manager.pull_file(device_id, args.pull)
+        local = getattr(args, "pull_out", None) or os.path.basename(args.pull)
+        adb_manager.pull_file(device_id, args.pull, local)
 
-    # Push file
     if args.push and device_id:
         adb_manager.push_file(device_id, args.push[0], args.push[1])
 
-    # APK Analysis
     if args.apk:
         apk_data = apk_analyzer.analyze_apk(args.apk)
         _save_to_session(apk_data, "apk")
 
-    # Network
     if args.port_scan:
         target = args.target
         if not target and device_id:
@@ -729,98 +706,4 @@ def cli_mode(args):
     if args.ssl_pinning and device_id:
         network_scanner.check_ssl_pinning(device_id, args.ssl_pinning)
 
-    if args.mitm_guide:
-        network_scanner.mitm_setup_guide()
-
-    # Vulnerability
-    if args.vuln_scan and device_id:
-        report = vulnerability_scanner.full_vulnerability_scan(device_id, args.pkg)
-        _save_to_session(report, "vuln")
-
-    if args.cve_check and device_id:
-        findings = vulnerability_scanner.check_android_version_cves(device_id)
-        _save_to_session({"cves": findings}, "cve")
-
-    if args.root_check and device_id:
-        vulnerability_scanner.check_root_status(device_id)
-
-    # Exploit
-    if args.exploit and device_id:
-        ex = args.exploit
-        if ex == "activity":
-            exploit_engine.launch_exported_activity(device_id, args.pkg, args.activity)
-        elif ex == "broadcast":
-            exploit_engine.trigger_broadcast_receiver(device_id, args.pkg, args.action)
-        elif ex == "provider":
-            exploit_engine.extract_content_provider(device_id, args.uri)
-        elif ex == "deep-link":
-            exploit_engine.deep_link_fuzzer(device_id, args.pkg, args.scheme)
-        elif ex == "frida":
-            exploit_engine.frida_injection_guide(args.pkg)
-        elif ex == "shell-drop":
-            exploit_engine.shell_payload_dropper(device_id, args.lhost, args.lport)
-        elif ex == "db-extract":
-            exploit_engine.extract_database(device_id, args.pkg, args.db_name)
-        elif ex == "lock-bypass":
-            exploit_engine.bypass_lock_screen(device_id)
-        elif ex == "dev-options":
-            exploit_engine.enable_developer_options(device_id)
-
-    # Payload
-    if args.payload:
-        out = args.payload_out
-        if args.payload in ("reverse_tcp","reverse_https","reverse_http","shell_tcp"):
-            payload_generator.generate_msfvenom_apk(args.lhost, args.lport, args.payload, out or "payload.apk")
-        elif args.payload == "intent":
-            payload_generator.generate_intent_payload(args.action, args.pkg, args.uri)
-        elif args.payload == "reverse-shells":
-            payload_generator.generate_reverse_shell_commands(args.lhost, args.lport)
-        elif args.payload == "adb-script":
-            payload_generator.generate_adb_payload_script(device_id, args.lhost, args.lport, out or "adb_payload.sh")
-        elif args.payload == "obfuscate":
-            payload_generator.obfuscate_payload(args.raw_payload or "", args.obfuscate_method)
-
-    # Report
-    if args.report:
-        data = _get_session()
-        data["target"] = args.target_name
-        if apk_data:
-            data.update(apk_data)
-        if args.report in ("html", "both"):
-            out = args.report_out or "phantomdroid_report.html"
-            report_generator.generate_html_report(data, out)
-        if args.report in ("json", "both"):
-            out = args.report_out or "phantomdroid_report.json"
-            report_generator.generate_json_report(data, out)
-        if args.report == "table":
-            report_generator.print_summary_table(data)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  ENTRY POINT
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def main():
-    parser = build_parser()
-
-    if len(sys.argv) == 1:
-        # No args → interactive
-        interactive_mode()
-        return
-
-    args = parser.parse_args()
-
-    if args.interactive:
-        interactive_mode()
-    else:
-        cli_mode(args)
-
-
-if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        console.print("\n\n[bold magenta]👻 PhantomDroid interrupted. Stay ethical.[/]\n")
-        sys.exit(0)
-
-
+    if args
