@@ -22,6 +22,8 @@ SEV_BADGE = {
     "INFO":     "#74b9ff",
 }
 
+# Мы используем фигурные скобки {{ }} для CSS, чтобы .format() их не трогал.
+# А переменные {target}, {timestamp} и т.д. остаются одинарными.
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -247,18 +249,17 @@ def generate_html_report(data: dict, output: str = "phantomdroid_report.html") -
 
     sections = findings_html + perms_html + secrets_html + urls_html
 
-    # Безопасная подстановка (без .format, чтобы не падать на символах {})
-    html = (
-        HTML_TEMPLATE
-        .replace("{target}", str(target))
-        .replace("{timestamp}", ts)
-        .replace("{report_id}", report_id)
-        .replace("{count_critical}", str(counts.get("CRITICAL", 0)))
-        .replace("{count_high}", str(counts.get("HIGH", 0)))
-        .replace("{count_medium}", str(counts.get("MEDIUM", 0)))
-        .replace("{count_low}", str(counts.get("LOW", 0)))
-        .replace("{count_total}", str(len(findings)))
-        .replace("{sections}", sections)
+    # Используем .format() с экранированными скобками в CSS
+    html = HTML_TEMPLATE.format(
+        target=target,
+        timestamp=ts,
+        report_id=report_id,
+        count_critical=counts.get("CRITICAL", 0),
+        count_high=counts.get("HIGH", 0),
+        count_medium=counts.get("MEDIUM", 0),
+        count_low=counts.get("LOW", 0),
+        count_total=len(findings),
+        sections=sections,
     )
 
     with open(output, "w", encoding="utf-8") as f:
