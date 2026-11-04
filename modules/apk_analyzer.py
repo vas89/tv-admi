@@ -94,6 +94,14 @@ def _extract_strings_from_bytes(data: bytes) -> list:
     return result
 
 
+def _decode_manifest(raw: bytes) -> str:
+    """Декодировать AndroidManifest.xml (текстовый или бинарный AXML)."""
+    if raw[:5] == b"<?xml" or raw[:5] == b"<mani":
+        return raw.decode("utf-8", errors="ignore")
+    strings = _extract_strings_from_bytes(raw)
+    return "\n".join(strings)
+
+
 def analyze_apk(apk_path: str) -> dict:
     """Full static analysis of an APK file."""
     findings = {
@@ -145,11 +153,7 @@ def analyze_apk(apk_path: str) -> dict:
     if "AndroidManifest.xml" in namelist:
         with console.status("[cyan]Parsing AndroidManifest.xml...[/]"):
             raw_manifest = zf.read("AndroidManifest.xml")
-            # Try to decode as text (non-binary APKs or already decoded)
-            try:
-                manifest_text = raw_manifest.decode("utf-8", errors="ignore")
-            except Exception:
-                manifest_text = raw_manifest.decode("latin-1", errors="ignore")
+            manifest_text = _decode_manifest(raw_manifest)
 
             # Parse flags
             findings["debuggable"] = "android:debuggable=\"true\"" in manifest_text or \
@@ -158,17 +162,16 @@ def analyze_apk(apk_path: str) -> dict:
                                          b'allowBackup' in raw_manifest
 
             # Extract all permissions
-            perms = _parse_manifest_permissions(manifest_text)
-            # Also scan binary bytes
-            perms += re.findall(rb'android\.permission\.(\w+)', raw_manifest)
-            perms = list(set([p if isinstance(p, str) else f"android.permission.{p.decode()}" for p in perms]))
-            findings["permissions"] = perms
+            perms = set(_parse_manifest_permissions(manifest_text))
+            for p in _extract_strings_from_bytes(raw_manifest):
+                if p.startswith("android.permission."):
+                    perms.add(p)
+            findings["permissions"] = sorted(perms)
 
-            for perm in perms:
-                full = perm if perm.startswith("android.permission.") else perm
-                sev = DANGEROUS_PERMS.get(full)
+            for perm in findings["permissions"]:
+                sev = DANGEROUS_PERMS.get(perm)
                 if sev:
-                    findings["dangerous_permissions"].append({"permission": full, "severity": sev})
+                    findings["dangerous_permissions"].append({"permission": perm, "severity": sev})
 
             # Exported components
             for comp_type, tag in [("activities", "activity"), ("services", "service"),
@@ -178,7 +181,8 @@ def analyze_apk(apk_path: str) -> dict:
                 findings["exported_components"][comp_type] = exported
 
             # Network security config
-            findings["network_security_config"] = "network_security_config" in manifest_text
+            findings["network_security_config"] = "network_security_config" in manifest_text or \
+                                                 b"network_security_config" in raw_manifest
 
             # Package & SDK
             pkg = re.search(r'package="([^"]+)"', manifest_text)
@@ -213,15 +217,16 @@ def analyze_apk(apk_path: str) -> dict:
 
     # ── URL & IP extraction ──────────────────────────────────────────────────
     with console.status("[cyan]Extracting URLs and IPs...[/]"):
-        all_text = ""
+        all_text = []
         for entry in namelist:
             try:
-                all_text += zf.read(entry).decode("utf-8", errors="ignore")
+                all_text.append(zf.read(entry).decode("utf-8", errors="ignore"))
             except Exception:
                 pass
+        blob = "\n".join(all_text)
 
-        urls = list(set(re.findall(r'https?://[^\s\'"<>{}\[\]]+', all_text)))
-        ips = list(set(re.findall(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', all_text)))
+        urls = sorted(set(re.findall(r'https?://[^\s\'"<>{}\[\]]+', blob)))
+        ips = sorted(set(re.findall(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', blob)))
         findings["urls"] = [u for u in urls if len(u) < 200][:50]
         findings["ips"] = [ip for ip in ips if not ip.startswith("0.") and ip != "127.0.0.1"][:20]
 
