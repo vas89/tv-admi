@@ -33,10 +33,11 @@ def run_adb(args: list, device_id: str = None, capture: bool = True):
 def check_adb():
     """Check if adb is installed."""
     out, rc = run_adb(["version"])
-    if rc == -1:
+    if rc == -1 or not out:
         console.print("[bold red]✗ ADB not found![/] Install Android Debug Bridge first.", style="red")
         return False
-    console.print(f"[green]✓ ADB found:[/] {out.splitlines()[0]}")
+    first_line = out.splitlines()[0] if out.splitlines() else "Unknown version"
+    console.print(f"[green]✓ ADB found:[/] {first_line}")
     return True
 
 
@@ -150,7 +151,6 @@ def capture_logcat(device_id: str, lines: int = 200):
             f.write(out)
         console.print(f"[green]✓ Logcat saved to:[/] {filename}")
 
-    # Highlight security-sensitive patterns
     patterns = ["password", "token", "secret", "api_key", "auth", "credential", "private"]
     hits = []
     for line in out.splitlines():
