@@ -706,4 +706,99 @@ def cli_mode(args):
     if args.ssl_pinning and device_id:
         network_scanner.check_ssl_pinning(device_id, args.ssl_pinning)
 
-    if args
+    if args.mitm_guide:
+        network_scanner.mitm_setup_guide()
+
+    if args.vuln_scan and device_id:
+        report = vulnerability_scanner.full_vulnerability_scan(device_id, args.pkg)
+        _save_to_session(report, "vuln")
+
+    if args.cve_check and device_id:
+        findings = vulnerability_scanner.check_android_version_cves(device_id)
+        _save_to_session({"cves": findings}, "cve")
+
+    if args.root_check and device_id:
+        vulnerability_scanner.check_root_status(device_id)
+
+    if args.exploit and device_id:
+        ex = args.exploit
+        if ex == "activity":
+            exploit_engine.launch_exported_activity(device_id, args.pkg, args.activity)
+        elif ex == "broadcast":
+            exploit_engine.trigger_broadcast_receiver(device_id, args.pkg, args.action)
+        elif ex == "provider":
+            exploit_engine.extract_content_provider(device_id, args.uri)
+        elif ex == "deep-link":
+            exploit_engine.deep_link_fuzzer(device_id, args.pkg, args.scheme)
+        elif ex == "frida":
+            exploit_engine.frida_injection_guide(args.pkg)
+        elif ex == "shell-drop":
+            exploit_engine.shell_payload_dropper(device_id, args.lhost, args.lport)
+        elif ex == "db-extract":
+            exploit_engine.extract_database(device_id, args.pkg, args.db_name)
+        elif ex == "lock-bypass":
+            exploit_engine.bypass_lock_screen(device_id)
+        elif ex == "dev-options":
+            exploit_engine.enable_developer_options(device_id)
+
+    if args.payload:
+        out = args.payload_out
+        if args.payload in ("reverse_tcp","reverse_https","reverse_http","shell_tcp"):
+            payload_generator.generate_msfvenom_apk(args.lhost, args.lport, args.payload, out or "payload.apk")
+        elif args.payload == "intent":
+            payload_generator.generate_intent_payload(args.action, args.pkg, args.uri)
+        elif args.payload == "reverse-shells":
+            payload_generator.generate_reverse_shell_commands(args.lhost, args.lport)
+        elif args.payload == "adb-script":
+            payload_generator.generate_adb_payload_script(device_id, args.lhost, args.lport, out or "adb_payload.sh")
+        elif args.payload == "obfuscate":
+            payload_generator.obfuscate_payload(args.raw_payload or "", args.obfuscate_method)
+
+    if args.report:
+        data = _get_session()
+        data["target"] = args.target_name
+        if apk_data:
+            data.update(apk_data)
+        if args.report in ("html", "both"):
+            if args.report == "both" and args.report_out:
+                base = args.report_out.rsplit(".", 1)[0]
+                out = f"{base}.html"
+            else:
+                out = args.report_out or "phantomdroid_report.html"
+            report_generator.generate_html_report(data, out)
+        if args.report in ("json", "both"):
+            if args.report == "both" and args.report_out:
+                base = args.report_out.rsplit(".", 1)[0]
+                out = f"{base}.json"
+            else:
+                out = args.report_out or "phantomdroid_report.json"
+            report_generator.generate_json_report(data, out)
+        if args.report == "table":
+            report_generator.print_summary_table(data)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  ENTRY POINT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def main():
+    parser = build_parser()
+
+    if len(sys.argv) == 1:
+        interactive_mode()
+        return
+
+    args = parser.parse_args()
+
+    if args.interactive:
+        interactive_mode()
+    else:
+        cli_mode(args)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        console.print("\n\n[bold magenta]👻 PhantomDroid interrupted. Stay ethical.[/]\n")
+        sys.exit(0)
